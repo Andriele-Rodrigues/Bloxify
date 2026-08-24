@@ -3,12 +3,11 @@ package com.example.brickbreaker.game
 import androidx.compose.ui.geometry.Offset
 
 /**
- * Representa a bola do jogo.
+ * Representa a bola do jogo, com movimento e aceleração vertical (gravidade).
  *
- * A bola possui posição, velocidade, raio e uma aceleração da gravidade que a
- * puxa para baixo a cada quadro.
- *
- * A gravidade pode ser ajustada diretamente na propriedade [gravity] abaixo.
+ * A bola guarda posição, velocidade e um valor de gravidade. A gravidade é
+ * uma aceleração constante que aumenta a velocidade vertical a cada quadro,
+ * dando à bola um comportamento de "peso", como se estivesse caindo.
  *
  * @property position centro da bola (x, y).
  * @property velocity vetor velocidade (vx, vy) em pixels por segundo.
