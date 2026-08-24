@@ -20,8 +20,9 @@ fun AppNavigation() {
         composable("home") {
             HomeScreen(
                 onStartGame = { navController.navigate("game") },
-                onMembers = { navController.navigate("members") }
-            ) { navController.navigate("settings") }
+                onMembers = { navController.navigate("members") },
+                onSettings = { navController.navigate("settings") }
+            )
         }
         composable("game") {
             GameScreen(onBack = { navController.popBackStack() })
