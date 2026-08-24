@@ -2,63 +2,94 @@ package com.example.brickbreaker.game
 
 /**
  * Responsável pelos cálculos de colisão do jogo.
- *
- * As funções utilizam apenas coordenadas e dimensões para não depender
- * diretamente das classes Ball, Paddle e Brick.
- *
- * Quando essas classes estiverem disponíveis, o GameEngine poderá usar
- * estas funções passando suas respectivas posições e dimensões.
  */
 object CollisionDetector {
 
     /**
-     * Verifica colisão da bola com a parede esquerda.
+     * Trata colisão com paredes e teto, retornando uma nova bola se houver impacto.
      */
-    fun hitLeftWall(
-        ballX: Float,
-        ballRadius: Float
-    ): Boolean {
-        return ballX - ballRadius <= 0f
-    }
-
-    /**
-     * Verifica colisão da bola com a parede direita.
-     */
-    fun hitRightWall(
-        ballX: Float,
-        ballRadius: Float,
+    fun handleWallCollisions(
+        ball: Ball,
         screenWidth: Float
-    ): Boolean {
-        return ballX + ballRadius >= screenWidth
+    ): Ball {
+        var newBall = ball
+        
+        // Parede esquerda
+        if (newBall.position.x - newBall.radius <= 0f) {
+            newBall = newBall.copy(position = newBall.position.copy(x = newBall.radius))
+            newBall = newBall.bounceHorizontal()
+        }
+        // Parede direita
+        else if (newBall.position.x + newBall.radius >= screenWidth) {
+            newBall = newBall.copy(position = newBall.position.copy(x = screenWidth - newBall.radius))
+            newBall = newBall.bounceHorizontal()
+        }
+        
+        // Teto
+        if (newBall.position.y - newBall.radius <= 0f) {
+            newBall = newBall.copy(position = newBall.position.copy(y = newBall.radius))
+            newBall = newBall.bounceVertical()
+        }
+        
+        return newBall
     }
 
     /**
-     * Verifica colisão da bola com o teto.
+     * Trata colisão com o paddle.
      */
-    fun hitTopWall(
-        ballY: Float,
-        ballRadius: Float
-    ): Boolean {
-        return ballY - ballRadius <= 0f
+    fun handlePaddleCollision(
+        ball: Ball,
+        paddle: Paddle
+    ): Ball {
+        if (ball.velocity.y > 0) { // Só colide se estiver descendo
+            if (circleIntersectsRectangle(
+                    ballX = ball.position.x,
+                    ballY = ball.position.y,
+                    ballRadius = ball.radius,
+                    rectX = paddle.left,
+                    rectY = paddle.y,
+                    rectWidth = paddle.width,
+                    rectHeight = paddle.height
+                )
+            ) {
+                return ball.copy(position = ball.position.copy(y = paddle.y - ball.radius))
+                    .bounceVertical()
+            }
+        }
+        return ball
     }
 
     /**
-     * Verifica se a bola saiu pela parte inferior da tela.
+     * Trata colisão com os tijolos.
      */
-    fun ballFell(
-        ballY: Float,
-        ballRadius: Float,
-        screenHeight: Float
-    ): Boolean {
+    fun handleBrickCollision(
+        ball: Ball,
+        bricks: List<Brick>
+    ): Ball {
+        for (brick in bricks) {
+            if (!brick.isDestroyed) {
+                if (circleIntersectsRectangle(
+                        ballX = ball.position.x,
+                        ballY = ball.position.y,
+                        ballRadius = ball.radius,
+                        rectX = brick.x,
+                        rectY = brick.y,
+                        rectWidth = brick.width,
+                        rectHeight = brick.height
+                    )
+                ) {
+                    brick.isDestroyed = true
+                    return ball.bounceVertical()
+                }
+            }
+        }
+        return ball
+    }
+
+    fun ballFell(ballY: Float, ballRadius: Float, screenHeight: Float): Boolean {
         return ballY - ballRadius > screenHeight
     }
 
-    /**
-     * Verifica a colisão entre uma bola circular e uma área retangular.
-     *
-     * Essa função poderá ser usada tanto para o paddle quanto para
-     * os tijolos.
-     */
     fun circleIntersectsRectangle(
         ballX: Float,
         ballY: Float,
@@ -68,23 +99,11 @@ object CollisionDetector {
         rectWidth: Float,
         rectHeight: Float
     ): Boolean {
-
-        val closestX = ballX.coerceIn(
-            rectX,
-            rectX + rectWidth
-        )
-
-        val closestY = ballY.coerceIn(
-            rectY,
-            rectY + rectHeight
-        )
-
+        val closestX = ballX.coerceIn(rectX, rectX + rectWidth)
+        val closestY = ballY.coerceIn(rectY, rectY + rectHeight)
         val distanceX = ballX - closestX
         val distanceY = ballY - closestY
-
-        val distanceSquared =
-            (distanceX * distanceX) + (distanceY * distanceY)
-
+        val distanceSquared = (distanceX * distanceX) + (distanceY * distanceY)
         return distanceSquared <= ballRadius * ballRadius
     }
 }

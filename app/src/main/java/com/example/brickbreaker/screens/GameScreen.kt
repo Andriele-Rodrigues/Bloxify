@@ -13,16 +13,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,47 +37,26 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.brickbreaker.audio.SoundManager
-import com.example.brickbreaker.data.BrickColorOption
-import com.example.brickbreaker.data.BrickSizeOption
 import com.example.brickbreaker.data.GamePreferences
-import com.example.brickbreaker.game.CollisionDetector
 import com.example.brickbreaker.game.GameEngine
+import com.example.brickbreaker.game.GameRules
 import com.example.brickbreaker.game.GameState
 import com.example.brickbreaker.game.GameStatus
 import com.example.brickbreaker.game.Level
 import com.example.brickbreaker.game.LevelGenerator
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 @Composable
 fun GameScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val preferences = remember { GamePreferences.getInstance(context) }
-
     val selectedColor by preferences.brickColorFlow.collectAsState()
     val selectedSize by preferences.brickSizeFlow.collectAsState()
-    val isSoundEnabled by preferences.soundEnabledFlow.collectAsState()
-
-    // Initialize and remember SoundManager tied to Compose lifecycle
-    val soundManager = remember { SoundManager(context) }
-    DisposableEffect(soundManager, isSoundEnabled) {
-        soundManager.isSoundEnabled = isSoundEnabled
-        onDispose {
-            soundManager.release()
-        }
-    }
 
     var gameState by remember { mutableStateOf(GameState()) }
     var currentLevel by remember { mutableStateOf<Level?>(null) }
     var engine by remember { mutableStateOf<GameEngine?>(null) }
-
-    // Play stage start chime on level initiation, level changes, and restarts
-    LaunchedEffect(gameState.currentLevel, gameState.status) {
-        if (gameState.status == GameStatus.PLAYING) {
-            soundManager.playStageStart()
-        }
-    }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -90,8 +66,7 @@ fun GameScreen(onBack: () -> Unit) {
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
 
-        // Initialize engine and level when layout dimensions or size preferences are available
-        LaunchedEffect(widthPx, heightPx, gameState.currentLevel, selectedSize) {
+        LaunchedEffect(widthPx, heightPx, gameState.currentLevel) {
             if (widthPx > 0 && heightPx > 0) {
                 if (engine == null) {
                     engine = GameEngine(screenWidth = widthPx, screenHeight = heightPx)
@@ -112,72 +87,25 @@ fun GameScreen(onBack: () -> Unit) {
         val activeLevel = currentLevel
 
         if (currentEngine != null && activeLevel != null) {
-            // Collision handler configuration with audio feedback
-            currentEngine.collisionHandler = { ball, paddle ->
-                // 1. Paddle collision check
-                if (ball.velocity.y > 0 && CollisionDetector.circleIntersectsRectangle(
-                        ballX = ball.position.x,
-                        ballY = ball.position.y,
-                        ballRadius = ball.radius,
-                        rectX = paddle.left,
-                        rectY = paddle.y,
-                        rectWidth = paddle.width,
-                        rectHeight = paddle.height
-                    )
-                ) {
-                    ball.bounceVertical()
-                    ball.position = ball.position.copy(y = paddle.y - ball.radius - 1f)
-                    soundManager.playPaddleHit()
-                }
+            
+            // Callback para processar o frame
+            currentEngine.onUpdate = { ball, paddle ->
+                val (updatedBall, newState) = GameRules.processFrame(
+                    ball = ball,
+                    paddle = paddle,
+                    level = activeLevel,
+                    gameState = gameState,
+                    screenWidth = widthPx,
+                    screenHeight = heightPx
+                )
 
-                // 2. Wall collisions
-                if (CollisionDetector.hitLeftWall(ball.position.x, ball.radius)) {
-                    ball.position = ball.position.copy(x = ball.radius + 1f)
-                    ball.bounceHorizontal()
-                } else if (CollisionDetector.hitRightWall(ball.position.x, ball.radius, widthPx)) {
-                    ball.position = ball.position.copy(x = widthPx - ball.radius - 1f)
-                    ball.bounceHorizontal()
-                }
-
-                if (CollisionDetector.hitTopWall(ball.position.y, ball.radius)) {
-                    ball.position = ball.position.copy(y = ball.radius + 1f)
-                    ball.bounceVertical()
-                }
-
-                // 3. Fall (Ball lost)
-                if (CollisionDetector.ballFell(ball.position.y, ball.radius, heightPx)) {
-                    gameState = gameState.ballLost()
+                if (newState.status != GameStatus.PLAYING) {
+                    gameState = newState
                     currentEngine.pause()
                 }
-
-                // 4. Brick collisions
-                var bounced = false
-                for (brick in activeLevel.bricks) {
-                    if (!brick.isDestroyed && CollisionDetector.circleIntersectsRectangle(
-                            ballX = ball.position.x,
-                            ballY = ball.position.y,
-                            ballRadius = ball.radius,
-                            rectX = brick.x,
-                            rectY = brick.y,
-                            rectWidth = brick.width,
-                            rectHeight = brick.height
-                        )
-                    ) {
-                        brick.isDestroyed = true
-                        if (!bounced) {
-                            ball.bounceVertical()
-                            bounced = true
-                        }
-                    }
-                }
-
-                if (activeLevel.isComplete()) {
-                    gameState = gameState.completeLevel()
-                    currentEngine.pause()
-                }
+                updatedBall to newState
             }
 
-            // Game loop driven by Compose frame clock
             LaunchedEffect(gameState.status) {
                 if (gameState.status == GameStatus.PLAYING) {
                     currentEngine.resume()
@@ -192,135 +120,109 @@ fun GameScreen(onBack: () -> Unit) {
                 }
             }
 
-            // Interactive game canvas
+            // Próximo nível automático (Requisito 'c')
+            LaunchedEffect(gameState.status) {
+                if (gameState.status == GameStatus.LEVEL_COMPLETED) {
+                    delay(1500)
+                    gameState = gameState.nextLevel()
+                }
+            }
+
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) {
+                    .pointerInput(currentEngine) {
                         detectDragGestures { change, _ ->
                             change.consume()
                             currentEngine.onDrag(change.position.x)
                         }
                     }
             ) {
-                // Draw bricks
-                for (brick in activeLevel.bricks) {
+                // Desenhar tijolos
+                activeLevel.bricks.forEach { brick ->
                     if (!brick.isDestroyed) {
-                        val brickColor = Color(selectedColor.getColorForRow(brick.row))
                         drawRoundRect(
-                            color = brickColor,
+                            color = Color(selectedColor.getColorForRow(brick.row)),
                             topLeft = Offset(brick.x, brick.y),
                             size = Size(brick.width, brick.height),
-                            cornerRadius = CornerRadius(8f, 8f)
+                            cornerRadius = CornerRadius(4.dp.toPx())
                         )
                     }
                 }
 
-                // Draw paddle
+                // Desenhar Paddle
                 val p = currentEngine.paddle
                 drawRoundRect(
-                    color = Color(0xFF625B71),
+                    color = Color(0xFF2196F3),
                     topLeft = Offset(p.left, p.y),
                     size = Size(p.width, p.height),
-                    cornerRadius = CornerRadius(12f, 12f)
+                    cornerRadius = CornerRadius(8.dp.toPx())
                 )
 
-                // Draw ball
+                // Desenhar Bola
                 val b = currentEngine.ball
                 drawCircle(
-                    color = Color(0xFF7D5260),
+                    color = Color(0xFFFFC107),
                     radius = b.radius,
                     center = b.position
                 )
             }
         }
 
-        // Top HUD Overlay
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp, start = 16.dp, end = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Nível ${gameState.currentLevel} / ${gameState.totalLevels}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            OutlinedButton(onClick = onBack) {
-                Text("SAIR")
-            }
-        }
-
-        // Overlay dialogs for GameStatus
+        // HUD e Diálogos (Fim de jogo / Vitória)
+        HUD(gameState = gameState, onBack = onBack)
+        
         if (gameState.status != GameStatus.PLAYING) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    modifier = Modifier.padding(24.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        when (gameState.status) {
-                            GameStatus.BALL_LOST -> {
-                                Text(
-                                    text = "Bola Perdida!",
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(
-                                    onClick = {
-                                        gameState = gameState.restartLevel()
-                                        engine?.reset()
-                                    }
-                                ) {
-                                    Text("TENTAR NOVAMENTE")
-                                }
-                            }
-                            GameStatus.LEVEL_COMPLETED -> {
-                                Text(
-                                    text = "Nível Concluído!",
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(
-                                    onClick = {
-                                        gameState = gameState.nextLevel()
-                                    }
-                                ) {
-                                    Text("PRÓXIMO NÍVEL")
-                                }
-                            }
-                            GameStatus.GAME_COMPLETED -> {
-                                Text(
-                                    text = "Parabéns! Jogo Concluído!",
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(onClick = onBack) {
-                                    Text("VOLTAR AO MENU")
-                                }
-                            }
-                            GameStatus.PLAYING -> {}
-                        }
+            GameDialog(
+                status = gameState.status,
+                onRestart = {
+                    gameState = gameState.restartLevel()
+                    engine?.reset()
+                },
+                onNext = { gameState = gameState.nextLevel() },
+                onMenu = onBack
+            )
+        }
+    }
+}
+
+@Composable
+fun HUD(gameState: GameState, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("NÍVEL ${gameState.currentLevel}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        OutlinedButton(onClick = onBack) { Text("SAIR") }
+    }
+}
+
+@Composable
+fun GameDialog(status: GameStatus, onRestart: () -> Unit, onNext: () -> Unit, onMenu: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
+        Card(modifier = Modifier.padding(24.dp)) {
+            Column(modifier = Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                when (status) {
+                    GameStatus.BALL_LOST -> {
+                        Text("BOLA PERDIDA", style = MaterialTheme.typography.headlineSmall, color = Color.Red)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = onRestart, modifier = Modifier.fillMaxWidth()) { Text("REINICIAR NÍVEL") }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) { Text("PULAR NÍVEL") }
                     }
+                    GameStatus.LEVEL_COMPLETED -> {
+                        Text("VITÓRIA!", style = MaterialTheme.typography.headlineSmall, color = Color(0xFF4CAF50))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Aguarde o próximo nível...")
+                    }
+                    GameStatus.GAME_COMPLETED -> {
+                        Text("PARABÉNS!", style = MaterialTheme.typography.headlineSmall)
+                        Text("Você venceu o desafio!")
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = onMenu) { Text("VOLTAR AO MENU") }
+                    }
+                    else -> {}
                 }
             }
         }
