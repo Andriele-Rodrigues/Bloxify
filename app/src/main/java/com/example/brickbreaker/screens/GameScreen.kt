@@ -169,7 +169,6 @@ fun GameScreen(onBack: () -> Unit) {
             }
         }
 
-        // HUD e Diálogos (Fim de jogo / Vitória)
         HUD(gameState = gameState, onBack = onBack)
         
         if (gameState.status != GameStatus.PLAYING) {
@@ -193,7 +192,19 @@ fun HUD(gameState: GameState, onBack: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("NÍVEL ${gameState.currentLevel}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Column {
+            Text(
+                text = "BLOXIFY",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Black
+            )
+            Text(
+                text = "NÍVEL ${gameState.currentLevel} - PONTOS: ${gameState.score}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
         OutlinedButton(onClick = onBack) { Text("SAIR") }
     }
 }

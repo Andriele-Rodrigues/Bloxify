@@ -31,11 +31,12 @@ fun HomeScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "BRICK BREAKER",
+            text = "BLOXIFY",
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
-            fontSize = 36.sp,
-            color = MaterialTheme.colorScheme.primary
+            fontSize = 48.sp,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 4.sp
         )
 
         Spacer(modifier = Modifier.height(48.dp))

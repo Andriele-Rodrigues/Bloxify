@@ -5,9 +5,6 @@ package com.example.brickbreaker.game
  */
 object GameRules {
 
-    /**
-     * Processa todas as colisões de um frame e retorna o novo estado da bola e do jogo.
-     */
     fun processFrame(
         ball: Ball,
         paddle: Paddle,
@@ -18,21 +15,30 @@ object GameRules {
     ): Pair<Ball, GameState> {
 
         var currentBall = ball
+        var currentGameState = gameState
 
-        // 1. Colisões Físicas
+        // 1. Paredes
         currentBall = CollisionDetector.handleWallCollisions(currentBall, screenWidth)
+        
+        // 2. Paddle
         currentBall = CollisionDetector.handlePaddleCollision(currentBall, paddle)
-        currentBall = CollisionDetector.handleBrickCollision(currentBall, level.bricks)
+        
+        // 3. Tijolos (com pontuação)
+        val (ballAfterBricks, points) = CollisionDetector.handleBrickCollision(currentBall, level.bricks)
+        currentBall = ballAfterBricks
+        if (points > 0) {
+            currentGameState = currentGameState.addPoints(points)
+        }
 
-        // 2. Regras de Estado
+        // 4. Regras de Estado
         if (CollisionDetector.ballFell(currentBall.position.y, currentBall.radius, screenHeight)) {
-            return currentBall to gameState.ballLost()
+            return currentBall to currentGameState.ballLost()
         }
 
         if (level.isComplete()) {
-            return currentBall to gameState.completeLevel()
+            return currentBall to currentGameState.completeLevel()
         }
 
-        return currentBall to gameState
+        return currentBall to currentGameState
     }
 }
