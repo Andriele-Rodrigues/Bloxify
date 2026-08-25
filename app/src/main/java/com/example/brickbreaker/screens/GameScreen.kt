@@ -37,6 +37,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.brickbreaker.data.GamePreferences
 import com.example.brickbreaker.game.GameEngine
 import com.example.brickbreaker.game.GameRules
@@ -53,6 +54,7 @@ fun GameScreen(onBack: () -> Unit) {
     val preferences = remember { GamePreferences.getInstance(context) }
     val selectedColor by preferences.brickColorFlow.collectAsState()
     val selectedSize by preferences.brickSizeFlow.collectAsState()
+    val highScore by preferences.highScoreFlow.collectAsState()
 
     var gameState by remember { mutableStateOf(GameState()) }
     var currentLevel by remember { mutableStateOf<Level?>(null) }
@@ -66,7 +68,8 @@ fun GameScreen(onBack: () -> Unit) {
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
 
-        LaunchedEffect(widthPx, heightPx, gameState.currentLevel) {
+        // O Nível é gerado quando o número do nível muda OU quando há um reset total (resetKey)
+        LaunchedEffect(widthPx, heightPx, gameState.currentLevel, gameState.resetKey) {
             if (widthPx > 0 && heightPx > 0) {
                 if (engine == null) {
                     engine = GameEngine(screenWidth = widthPx, screenHeight = heightPx)
@@ -87,8 +90,6 @@ fun GameScreen(onBack: () -> Unit) {
         val activeLevel = currentLevel
 
         if (currentEngine != null && activeLevel != null) {
-            
-            // Callback para processar o frame
             currentEngine.onUpdate = { ball, paddle ->
                 val (updatedBall, newState) = GameRules.processFrame(
                     ball = ball,
@@ -99,9 +100,14 @@ fun GameScreen(onBack: () -> Unit) {
                     screenHeight = heightPx
                 )
 
+                // IMPORTANTE: Atualiza o gameState a cada frame para refletir os pontos no HUD
+                gameState = newState
+
                 if (newState.status != GameStatus.PLAYING) {
-                    gameState = newState
                     currentEngine.pause()
+                    if (newState.lives <= 0 || newState.status == GameStatus.GAME_COMPLETED) {
+                        preferences.saveGameScore(newState.score)
+                    }
                 }
                 updatedBall to newState
             }
@@ -120,7 +126,6 @@ fun GameScreen(onBack: () -> Unit) {
                 }
             }
 
-            // Próximo nível automático (Requisito 'c')
             LaunchedEffect(gameState.status) {
                 if (gameState.status == GameStatus.LEVEL_COMPLETED) {
                     delay(1500)
@@ -138,7 +143,6 @@ fun GameScreen(onBack: () -> Unit) {
                         }
                     }
             ) {
-                // Desenhar tijolos
                 activeLevel.bricks.forEach { brick ->
                     if (!brick.isDestroyed) {
                         drawRoundRect(
@@ -150,7 +154,6 @@ fun GameScreen(onBack: () -> Unit) {
                     }
                 }
 
-                // Desenhar Paddle
                 val p = currentEngine.paddle
                 drawRoundRect(
                     color = Color(0xFF2196F3),
@@ -159,7 +162,6 @@ fun GameScreen(onBack: () -> Unit) {
                     cornerRadius = CornerRadius(8.dp.toPx())
                 )
 
-                // Desenhar Bola
                 val b = currentEngine.ball
                 drawCircle(
                     color = Color(0xFFFFC107),
@@ -169,11 +171,13 @@ fun GameScreen(onBack: () -> Unit) {
             }
         }
 
-        HUD(gameState = gameState, onBack = onBack)
+        HUD(gameState = gameState, onBack = onBack, highScore = highScore)
         
         if (gameState.status != GameStatus.PLAYING) {
             GameDialog(
+                gameState = gameState,
                 status = gameState.status,
+                highScore = highScore,
                 onRestart = {
                     gameState = gameState.restartLevel()
                     engine?.reset()
@@ -186,39 +190,83 @@ fun GameScreen(onBack: () -> Unit) {
 }
 
 @Composable
-fun HUD(gameState: GameState, onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text(
-                text = "BLOXIFY",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Black
-            )
-            Text(
-                text = "NÍVEL ${gameState.currentLevel} - PONTOS: ${gameState.score}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+fun HUD(gameState: GameState, onBack: () -> Unit, highScore: Int) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "🏠 NÍVEL ${gameState.currentLevel}/${gameState.totalLevels}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "PONTOS: ${gameState.score.toString().padStart(4, '0')}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "RECORDE: ${highScore.toString().padStart(4, '0')}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray
+                )
+            }
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                repeat(3) { index ->
+                    Text(
+                        text = if (index < gameState.lives) "❤️" else "🖤",
+                        fontSize = 18.sp,
+                        modifier = Modifier.padding(horizontal = 1.dp)
+                    )
+                }
+            }
+
+            OutlinedButton(onClick = onBack, modifier = Modifier.height(38.dp)) { 
+                Text("SAIR", fontSize = 12.sp) 
+            }
         }
-        OutlinedButton(onClick = onBack) { Text("SAIR") }
     }
 }
 
 @Composable
-fun GameDialog(status: GameStatus, onRestart: () -> Unit, onNext: () -> Unit, onMenu: () -> Unit) {
+fun GameDialog(
+    gameState: GameState, 
+    status: GameStatus, 
+    highScore: Int,
+    onRestart: () -> Unit, 
+    onNext: () -> Unit, 
+    onMenu: () -> Unit
+) {
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
         Card(modifier = Modifier.padding(24.dp)) {
             Column(modifier = Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 when (status) {
                     GameStatus.BALL_LOST -> {
-                        Text("BOLA PERDIDA", style = MaterialTheme.typography.headlineSmall, color = Color.Red)
+                        val isGameOver = gameState.lives <= 0
+                        Text(
+                            text = if (isGameOver) "FIM DE JOGO" else "BOLA PERDIDA",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = Color.Red,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        if (isGameOver) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Pontuação Final: ${gameState.score}")
+                            Text("Recorde Anterior: $highScore")
+                        }
+
                         Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = onRestart, modifier = Modifier.fillMaxWidth()) { Text("REINICIAR NÍVEL") }
+                        if (!isGameOver) {
+                            Button(onClick = onRestart, modifier = Modifier.fillMaxWidth()) { Text("CONTINUAR NÍVEL") }
+                        } else {
+                            Button(onClick = onRestart, modifier = Modifier.fillMaxWidth()) { Text("REINICIAR TUDO") }
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) { Text("PULAR NÍVEL") }
                     }
@@ -230,6 +278,8 @@ fun GameDialog(status: GameStatus, onRestart: () -> Unit, onNext: () -> Unit, on
                     GameStatus.GAME_COMPLETED -> {
                         Text("PARABÉNS!", style = MaterialTheme.typography.headlineSmall)
                         Text("Você venceu o desafio!")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Pontuação Final: ${gameState.score}")
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = onMenu) { Text("VOLTAR AO MENU") }
                     }
