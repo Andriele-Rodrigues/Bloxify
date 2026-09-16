@@ -18,18 +18,6 @@ Cada elemento $M[r][c]$ armazena o estado do bloco na coordenada $(r, c)$, onde 
 
 A renderização dos blocos no Compose `Canvas` é proporcional à resolução da tela do dispositivo (`screenWidth` $\times$ `screenHeight`), garantindo perfeita responsividade em qualquer densidade de pixels (DPI).
 
-```
- 0,0 --------------------------------------------> screenWidth (X)
-  |   |<- margin ->|  gap  |  gap  |<- margin ->|
-  |   +------------+-------+-------+------------+
-  |   | [Bloco 0,0]|       |       | [Bloco 0,7]| -> topOffset
-  |   +------------+-------+-------+------------+
-  |   | [Bloco 1,0]|       |       | [Bloco 1,7]|
-  |   +------------+-------+-------+------------+
-  v
-screenHeight (Y)
-```
-
 ### 2.1. Fórmulas de Dimensão
 * **Largura do Bloco ($W_{brick}$):**
   $$W_{brick} = \frac{\text{screenWidth} - (2 \times \text{horizontalPadding}) - ((C - 1) \times \text{brickSpacing})}{C}$$

@@ -33,15 +33,12 @@ O projeto está hospedado e versionado publicamente no GitHub:
 A documentação detalhada foi dividida em tópicos específicos conforme os critérios de avaliação:
 
 ### 📄 [1. Ambiente de Desenvolvimento, Tecnologias e Geração do APK](docs/ambiente-e-apk.md)
-* **Peso: 2 Pontos**
 * **Conteúdo:** Justificativa da escolha da IDE (Android Studio), linguagem (Kotlin), bibliotecas (Jetpack Compose, Navigation, SoundPool) e guia passo a passo para gerar o APK via linha de comando (`./gradlew assembleDebug`) e via interface gráfica.
 
-### 📄 [2. Apresentação dos Wireframes em Alta Definição](docs/wireframes.md)
-* **Peso: 4 Pontos**
-* **Conteúdo:** Wireframes estruturados de todas as telas (`HomeScreen`, `SettingsScreen`, `MembersScreen`) e dos 5 níveis do jogo (`GameScreen`), acompanhados de fluxos de navegação e detalhamento dos componentes de interface.
+### 📄 2. Apresentação dos Wireframes
+* **Conteúdo:** Wireframes estruturados de todas as telas ([Wireframe Game](docs/Wireframe/wireframe_game.png), [Wireframe Home](docs/Wireframe/wireframe_home.png), [Wireframe Members](docs/Wireframe/wireframe_members.png), [Wireframe Setting](docs/Wireframe/wireframe_settings.png)), acompanhados de fluxos de navegação e detalhamento dos componentes de interface.
 
 ### 📄 [3. Documentação de Métodos de Construção da Parede de Blocos](docs/construcao-paredes-blocos.md)
-* **Peso: 2 Pontos**
 * **Conteúdo:** Modelagem matemática da grade $5 \times 8$, fórmulas de dimensionamento responsivo, algoritmos de instanciação por matriz e procedural, delimitação das 4 paredes físicas e física de colisão AABB.
 
 ---
